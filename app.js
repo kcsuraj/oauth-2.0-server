@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const bodyParser = require("body-parser");
 const constants = require("./utils/constants");
 const AuthCode = require("./lib/models/authCode");
 const Client = require("./lib/models/client");
@@ -10,15 +11,17 @@ const authorize = require("./lib/middlewares/authorize");
 // Create Express server
 const app = express();
 
+// configure app to use body parser
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+
 // Connect to MongoDB database
 mongoose
   .connect(constants.mongoURI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
-  .then(() => {
-    console.log("Database connection is successful");
-  })
+  .then(() => {})
   .catch((err) => {
     console.log(
       "MongoDB connection error. Please make sure MongoDB is running. " + err
@@ -65,7 +68,7 @@ app.get("/authorize", (req, res, next) => {
         //   handle the scope
       }
 
-      const authCode = new authCode({
+      const authCode = new AuthCode({
         clientId,
         userId: client.userId,
         redirectUri,
@@ -82,7 +85,8 @@ app.get("/authorize", (req, res, next) => {
         const redirect = `${redirectUri}?code=${response.code}&state=${
           state === undefined ? "" : state
         }`;
-        res.redirect(redirect);
+        // res.redirect(redirect);
+        res.json(response);
       } else {
         res.json(response);
       }
@@ -90,138 +94,140 @@ app.get("/authorize", (req, res, next) => {
   );
 });
 
-app.post("/token", (req, res) => {
+app.get("/token", (req, res) => {
   const {
     grant_type: grantType,
     code: authCode,
     redirect_uri: redirectUri,
     client_id: clientId,
   } = req.body;
-});
 
-if (!grantType) {
-  // No grant type passed - Cancel the request
-}
+  if (!grantType) {
+    // No grant type passed - Cancel the request
+  }
 
-if (grantType === "authorization_code") {
-  AuthCode.findOne(
-    {
-      code: authCode,
-    },
-    (err, code) => {
-      if (err) {
-        // handle error
-      }
-      if (!code) {
-        // No valid authorization code provided
-      }
-      if (code.consumed) {
-        // the code got consumed already - cancel
-      }
-
-      code.consumed = true;
-      code.save();
-      if (code.redirectUri !== redirectUri) {
-        // cancel the request
-      }
-
-      // Validate client id
-      Client.findOne(
-        {
-          clientId,
-        },
-        (error, client) => {
-          if (error) {
-            // handle error
-          }
-          if (!client) {
-            // client id provided does not exist
-          }
-          const refreshToken = new RefreshToken({
-            userId: code.userId,
-          });
-          refreshToken.save();
-
-          const token = new Token({
-            refreshToken: refreshToken.token,
-            userId: code.userId,
-          });
-
-          token.save();
-
-          const response = {
-            access_token: token.accessToken,
-            refresh_token: token.refreshToken,
-            expires_in: token.expiresIn,
-            tokenType: tokenType,
-          };
-
-          res.json(response);
-        }
-      );
-    }
-  );
-} else if (grantType === "refresh_token") {
-  if (!refreshToken) {
-    // no refresh token provided - cancel
-    RefreshToken.findOne(
+  if (grantType === "authorization_code") {
+    AuthCode.findOne(
       {
-        token: refreshToken,
+        code: authCode,
       },
-      (err, token) => {
+      (err, code) => {
         if (err) {
           // handle error
         }
 
-        if (!token) {
-          // no refresh token found
+        if (!code) {
+          // No valid authorization code provided
         }
-        if (token.consumed) {
-          // token got consumed already
-        }
+        // if (code.consumed) {
+        // the code got consumed already - cancel
+        // }
 
-        // Consuem all previous refresh tokens
-        RefreshToken.update(
+        // code.consumed = true;
+        // code.save();
+        // if (code.redirectUri !== redirectUri) {
+        // cancel the request
+        // }
+
+        // Validate client id
+        Client.findOne(
           {
-            userId: token.userId,
-            consumed: false,
+            clientId,
           },
-          {
-            $set: { consumed: true },
+          (error, client) => {
+            if (error) {
+              // handle error
+            }
+            if (!client) {
+              // client id provided does not exist
+            }
+            const refreshToken = new RefreshToken({
+              userId: code.userId,
+            });
+            refreshToken.save();
+
+            const token = new Token({
+              refreshToken: refreshToken.token,
+              userId: code.userId,
+            });
+
+            token.save();
+
+            const response = {
+              access_token: token.accessToken,
+              refresh_token: token.refreshToken,
+              expires_in: token.expiresIn,
+              tokenType: token.tokenType,
+            };
+
+            res.json(response);
           }
         );
-
-        const refreshToken = new RefreshToken({
-          userId: token.userId,
-        });
-
-        refreshToken.save();
-
-        const token = new Token({
-          refreshToken: refreshToken.token,
-          userId: token.userId,
-        });
-        token.save();
-
-        const response = {
-          access_token: token.accessToken,
-          refresh_token: token.refreshToken,
-          expires_in: token.expiresIn,
-          token_type: token.tokenType,
-        };
-
-        // send new token to consumer
-        res.json(response);
       }
     );
+  } else if (grantType === "refresh_token") {
+    if (!refreshToken) {
+      // no refresh token provided - cancel
+      RefreshToken.findOne(
+        {
+          token: refreshToken,
+        },
+        (err, token) => {
+          if (err) {
+            // handle error
+          }
+
+          if (!token) {
+            // no refresh token found
+          }
+          if (token.consumed) {
+            // token got consumed already
+          }
+
+          // Consuem all previous refresh tokens
+          RefreshToken.update(
+            {
+              userId: token.userId,
+              consumed: false,
+            },
+            {
+              $set: { consumed: true },
+            }
+          );
+
+          const refreshToken = new RefreshToken({
+            userId: token.userId,
+          });
+
+          refreshToken.save();
+
+          const newToken = new Token({
+            refreshToken: refreshToken.token,
+            userId: token.userId,
+          });
+          token.save();
+
+          const response = {
+            access_token: newToken.accessToken,
+            refresh_token: newToken.refreshToken,
+            expires_in: newToken.expiresIn,
+            token_type: newToken.tokenType,
+          };
+
+          // send new token to consumer
+          res.json(response);
+        }
+      );
+    }
   }
-}
+});
 
 app.get("/", (req, res, next) => {
   const client = new Client({
-    name: "Test",
+    name: "Suraj",
     userId: 1,
-    redirectUri: "http://localhost:5000/callback",
+    redirectUri: "http://localhost:5000",
+    scope: "read",
   });
 
   client.save((err) => {
@@ -234,7 +240,7 @@ app.get("/", (req, res, next) => {
 });
 
 app.get("/user", authorize, (req, res) => {
-  // console.log(res);
+  //
 });
 
 app.set("port", process.env.PORT || 5200);
