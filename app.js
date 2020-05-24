@@ -8,6 +8,8 @@ const Token = require("./lib/models/token");
 const RefreshToken = require("./lib/models/refreshToken");
 const IdToken = require("./lib/models/idToken");
 const authorize = require("./lib/middlewares/authorize");
+const authError = require("./lib/errors/authError");
+const handleError = require("./lib/errors/handleError");
 
 // Create Express server
 const app = express();
@@ -40,6 +42,7 @@ app.get("/authorize", (req, res, next) => {
 
   if (!responseType) {
     // Cancel the request - Missed the response type
+    next(new authError("invalid_request", "Missing param: response_type"));
   }
 
   if (responseType !== "code") {
@@ -100,7 +103,7 @@ app.get("/authorize", (req, res, next) => {
   );
 });
 
-app.get("/token", (req, res) => {
+app.post("/token", (req, res) => {
   const {
     grant_type: grantType,
     code: authCode,
@@ -110,6 +113,10 @@ app.get("/token", (req, res) => {
 
   if (!grantType) {
     // No grant type passed - Cancel the request
+    return errorHandler(
+      new authError("invalid_request", "Missing parameter: grant_type"),
+      res
+    );
   }
 
   if (grantType === "authorization_code") {
@@ -127,9 +134,12 @@ app.get("/token", (req, res) => {
         if (!code) {
           // No valid authorization code provided
         }
-        // if (code.consumed) {
-        // the code got consumed already - cancel
-        // }
+        if (code.consumed) {
+          return errorHandler(
+            new authError("invalid_grant", "Authorization Code expired"),
+            res
+          );
+        }
 
         // code.consumed = true;
         // code.save();
