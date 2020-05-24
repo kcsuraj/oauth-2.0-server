@@ -6,6 +6,7 @@ const AuthCode = require("./lib/models/authCode");
 const Client = require("./lib/models/client");
 const Token = require("./lib/models/token");
 const RefreshToken = require("./lib/models/refreshToken");
+const IdToken = require("./lib/models/idToken");
 const authorize = require("./lib/middlewares/authorize");
 
 // Create Express server
@@ -49,6 +50,11 @@ app.get("/authorize", (req, res, next) => {
     //   cancel the request - Client id is missing
   }
 
+  if (!scope || scope.indexOf("openid") < 0) {
+    //  Scope is missing or not well defined
+    console.log(" ===> scope missing");
+  }
+
   // Mongoose model - consists of an id, secret, user ID and other attributes like redirectURI
   Client.findOne(
     {
@@ -65,7 +71,7 @@ app.get("/authorize", (req, res, next) => {
       }
 
       if (scope !== client.scope) {
-        //   handle the scope
+        //   scope is missing or not well defined
       }
 
       const authCode = new AuthCode({
@@ -112,6 +118,8 @@ app.get("/token", (req, res) => {
         code: authCode,
       },
       (err, code) => {
+        let response;
+
         if (err) {
           // handle error
         }
@@ -141,10 +149,6 @@ app.get("/token", (req, res) => {
             if (!client) {
               // client id provided does not exist
             }
-            const refreshToken = new RefreshToken({
-              userId: code.userId,
-            });
-            refreshToken.save();
 
             const token = new Token({
               refreshToken: refreshToken.token,
@@ -153,12 +157,35 @@ app.get("/token", (req, res) => {
 
             token.save();
 
-            const response = {
-              access_token: token.accessToken,
-              refresh_token: token.refreshToken,
-              expires_in: token.expiresIn,
-              tokenType: token.tokenType,
-            };
+            if (client.scope && client.scope.indexOf("openid") >= 0) {
+              const idToken = new IdToken({
+                iss: client.redirectUri,
+                aud: client.clientId,
+                userId: code.userId,
+              });
+
+              idToken.save();
+
+              response = {
+                access_token: token.accessToken,
+                refreshToken: token.refreshToken,
+                id_token: idToken.sub,
+                expires_in: token.expiresIn,
+                token_type: token.tokenType,
+              };
+            } else {
+              const refreshToken = new RefreshToken({
+                userId: code.userId,
+              });
+              refreshToken.save();
+
+              response = {
+                access_token: token.accessToken,
+                refresh_token: token.refreshToken,
+                expires_in: token.expiresIn,
+                tokenType: token.tokenType,
+              };
+            }
 
             res.json(response);
           }
@@ -239,7 +266,7 @@ app.get("/", (req, res, next) => {
   });
 });
 
-app.get("/user", authorize, (req, res) => {
+app.get("/userInfo", authorize, (req, res) => {
   //
 });
 
