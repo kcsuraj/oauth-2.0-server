@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
+const morgan = require("morgan");
 const constants = require("./utils/constants");
 const AuthCode = require("./lib/models/authCode");
 const Client = require("./lib/models/client");
@@ -9,7 +10,7 @@ const RefreshToken = require("./lib/models/refreshToken");
 const IdToken = require("./lib/models/idToken");
 const authorize = require("./lib/middlewares/authorize");
 const authError = require("./lib/errors/authError");
-const handleError = require("./lib/errors/handleError");
+const handleError = require("./lib/middlewares/handleError");
 
 // Create Express server
 const app = express();
@@ -17,6 +18,9 @@ const app = express();
 // configure app to use body parser
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+
+// Add HTTP request logger
+app.use(morgan("combined"));
 
 // Connect to MongoDB database
 mongoose
@@ -42,7 +46,7 @@ app.get("/authorize", (req, res, next) => {
 
   if (!responseType) {
     // Cancel the request - Missed the response type
-    next(new authError("invalid_request", "Missing param: response_type"));
+    throw new authError("invalid_request", "Missing param: response_type");
   }
 
   if (responseType !== "code") {
@@ -279,6 +283,14 @@ app.get("/", (req, res, next) => {
 app.get("/userInfo", authorize, (req, res) => {
   //
 });
+
+// app.use((req, res, next) => {
+//   const error = new Error("Not Found!");
+//   error.status = 404;
+//   next(error);
+// });
+
+app.use(handleError);
 
 app.set("port", process.env.PORT || 5200);
 
