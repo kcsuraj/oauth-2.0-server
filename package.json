@@ -1,6 +1,9 @@
 {
   "dependencies": {
-    "express": "^4.17.1"
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "mongoose": "^5.9.15",
+    "node-uuid": "^1.4.8"
   },
   "scripts": {
     "start": "node ./server.js",

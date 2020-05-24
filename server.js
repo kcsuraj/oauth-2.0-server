@@ -1,4 +1,5 @@
 const app = require("./app");
+
 /**
  * Start Express server.
  */
