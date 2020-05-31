@@ -2,7 +2,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const morgan = require("morgan");
-const path = require("path");
 const constants = require("./utils/constants");
 const handleError = require("./middlewares/handleError");
 const routes = require("./routes");
@@ -13,10 +12,6 @@ const app = express();
 // configure app to use body parser
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-
-// view engine setup
-app.set("views", path.join(__dirname, "views"));
-app.set("view engine", "pug");
 
 // Add HTTP request logger
 app.use(morgan("combined"));
