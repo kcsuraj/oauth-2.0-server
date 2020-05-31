@@ -9,7 +9,7 @@
     "node-uuid": "^1.4.8"
   },
   "scripts": {
-    "start": "node ./server.js",
-    "dev": "nodemon ./server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   }
 }
