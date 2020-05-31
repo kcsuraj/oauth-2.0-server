@@ -13,9 +13,6 @@ routes.post("/token", getToken);
 // Get Authorization code
 routes.get("/authorize", getAuthorization);
 
-// Create a sample client for authorization
-routes.get("/client", createClient);
-
 // !TODO create route to get user profile as per OpenID standard
 // routes.get("/userInfo", authorize, (req, res) => {
 // });

@@ -5,8 +5,14 @@ const Token = require("../models/token");
 const RefreshToken = require("../models/refreshToken");
 const IdToken = require("../models/idToken");
 const authError = require("../errors/authError");
+const {
+  getClient,
+  getAuthCode,
+  getRefreshToken,
+  consumeAllTokens,
+} = require("../services/auth");
 
-const getAuthorization = (req, res, next) => {
+const getAuthorization = async (req, res, next) => {
   const {
     response_type: responseType,
     client_id: clientId,
@@ -27,53 +33,45 @@ const getAuthorization = (req, res, next) => {
     throw new authError("invalid_request", "Client Id is missing");
   }
 
-  // if (!scope || scope.indexOf("openid") < 0) {
-  //   throw new authError(
-  //     "invalid_scope",
-  //     "Scope is missing or not well defined"
-  //   );
-  // }
+  if (!scope || scope.indexOf("openid") < 0) {
+    throw new authError(
+      "invalid_scope",
+      "Scope is missing or not well defined"
+    );
+  }
 
-  // Mongoose model - consists of an id, secret, user ID and other attributes like redirectURI
-  Client.findOne(
-    {
-      clientId,
-    },
-    (err, client) => {
-      if (err) {
-        //   handle error by passing to the middleware
-        next(err);
-      }
-
-      if (!client) {
-        return next(new authError("invalid_request", "Client does not exist"));
-      }
-
-      if (scope !== client.scope) {
-        return next(
-          new authError("invalid_scope", "Scope is missing or not well defined")
-        );
-      }
-
-      const authCode = new AuthCode({
-        clientId,
-        userId: client.userId,
-        redirectUri,
-      });
-
-      authCode.save();
-
-      const response = {
-        state,
-        code: authCode.code,
-      };
-
-      res.json(response);
+  try {
+    const client = await getClient(clientId);
+    if (!client) {
+      return next(new authError("invalid_request", "Client does not exist"));
     }
-  );
+
+    if (scope !== client.scope) {
+      return next(
+        new authError("invalid_scope", "Scope is missing or not well defined")
+      );
+    }
+
+    const authCode = new AuthCode({
+      clientId,
+      userId: client.userId,
+      redirectUri,
+    });
+
+    authCode.save();
+
+    const response = {
+      state,
+      code: authCode.code,
+    };
+
+    res.json(response);
+  } catch (error) {
+    next(err);
+  }
 };
 
-const getToken = (req, res) => {
+const getToken = async (req, res, next) => {
   const {
     grant_type: grantType,
     code: authCode,
@@ -87,172 +85,143 @@ const getToken = (req, res) => {
   }
 
   if (grantType === "authorization_code") {
-    AuthCode.findOne(
-      {
-        code: authCode,
-      },
-      (err, code) => {
-        let response;
+    try {
+      const code = await getAuthCode(authCode);
 
-        if (err) {
-          next(err);
-        }
-
-        if (!code) {
-          throw new authError(
-            "invalid_grant",
-            "No valid authorization code provided"
-          );
-        }
-        if (code.consumed) {
-          throw new authError("invalid_grant", "Authorization code expired");
-        }
-
-        code.consumed = true;
-        code.save();
-        // if (code.redirectUri !== redirectUri) {
-        // cancel the request
-        // }
-
-        // Validate client id
-        Client.findOne(
-          {
-            clientId,
-          },
-          (error, client) => {
-            if (error) {
-              next(error);
-              // handle error
-            }
-            if (!client) {
-              throw new authError("invalid_request", "Client id not found");
-            }
-
-            var refreshToken = new RefreshToken({ userId: code.userId });
-
-            refreshToken.save();
-
-            const token = new Token({
-              refreshToken: refreshToken.token,
-              userId: code.userId,
-            });
-
-            token.save();
-
-            if (client.scope && client.scope.indexOf("openid") >= 0) {
-              const idToken = new IdToken({
-                iss: client.redirectUri,
-                aud: client.clientId,
-                userId: code.userId,
-              });
-
-              idToken.save();
-
-              response = {
-                access_token: token.accessToken,
-                refreshToken: token.refreshToken,
-                id_token: idToken.sub,
-                expires_in: token.expiresIn,
-                token_type: token.tokenType,
-              };
-            } else {
-              const refreshToken = new RefreshToken({
-                userId: code.userId,
-              });
-              refreshToken.save();
-
-              response = {
-                access_token: token.accessToken,
-                refresh_token: token.refreshToken,
-                expires_in: token.expiresIn,
-                tokenType: token.tokenType,
-              };
-            }
-
-            res.json(response);
-          }
+      if (!code) {
+        throw new authError(
+          "invalid_grant",
+          "No valid authorization code provided"
         );
       }
-    );
-  } else if (grantType === "refresh_token") {
-    if (!refreshToken) {
-      // no refresh token provided - cancel
-      RefreshToken.findOne(
-        {
-          token: refreshToken,
-        },
-        (err, token) => {
-          if (err) {
-            next(err);
-            // handle error
-          }
+      if (code.consumed) {
+        throw new authError("invalid_grant", "Authorization code expired");
+      }
 
-          if (!token) {
-            throw new authError("invalid_token", "Token not valid");
-          }
-          if (token.consumed) {
-            // token got consumed already
+      code.consumed = true;
+      code.save();
+      // if (code.redirectUri !== redirectUri) {
+      // cancel the request
+      // }
 
-            throw new authError("invalid_grant", "Code expired");
-          }
+      try {
+        const client = await getClient(clientId);
+        if (!client) {
+          throw new authError("invalid_request", "Client id not found");
+        }
 
-          // Consuem all previous refresh tokens
-          RefreshToken.update(
-            {
-              userId: token.userId,
-              consumed: false,
-            },
-            {
-              $set: { consumed: true },
-            }
-          );
+        var refreshToken = new RefreshToken({ userId: code.userId });
 
-          const refreshToken = new RefreshToken({
-            userId: token.userId,
+        refreshToken.save();
+
+        const token = new Token({
+          refreshToken: refreshToken.token,
+          userId: code.userId,
+        });
+
+        token.save();
+
+        if (client.scope && client.scope.indexOf("openid") >= 0) {
+          const idToken = new IdToken({
+            iss: client.redirectUri,
+            aud: client.clientId,
+            userId: code.userId,
           });
 
+          idToken.save();
+
+          response = {
+            access_token: token.accessToken,
+            refreshToken: token.refreshToken,
+            id_token: idToken.sub,
+            expires_in: token.expiresIn,
+            token_type: token.tokenType,
+          };
+        } else {
+          const refreshToken = new RefreshToken({
+            userId: code.userId,
+          });
           refreshToken.save();
 
-          const newToken = new Token({
-            refreshToken: refreshToken.token,
-            userId: token.userId,
-          });
-          token.save();
-
-          const response = {
-            access_token: newToken.accessToken,
-            refresh_token: newToken.refreshToken,
-            expires_in: newToken.expiresIn,
-            token_type: newToken.tokenType,
+          response = {
+            access_token: token.accessToken,
+            refresh_token: token.refreshToken,
+            expires_in: token.expiresIn,
+            tokenType: token.tokenType,
           };
-
-          // send new token to consumer
-          res.json(response);
         }
-      );
+
+        res.json(response);
+      } catch (error) {
+        next(error);
+      }
+    } catch (error) {
+      next(error);
+    }
+  } else if (grantType === "refresh_token") {
+    if (!refresh_token) {
+      // No refresh token provided
+    } else {
+      try {
+        const token = await getRefreshToken(refreshToken);
+
+        if (!token) {
+          throw new authError("invalid_token", "Token not valid");
+        }
+        if (token.consumed) {
+          // token got consumed already
+
+          throw new authError("invalid_grant", "Code expired");
+        }
+        // Consume previous used tokens
+        await consumeAllTokens();
+
+        const refreshToken = new RefreshToken({
+          userId: token.userId,
+        });
+
+        refreshToken.save();
+
+        const newToken = new Token({
+          refreshToken: refreshToken.token,
+          userId: token.userId,
+        });
+        token.save();
+
+        const response = {
+          access_token: newToken.accessToken,
+          refresh_token: newToken.refreshToken,
+          expires_in: newToken.expiresIn,
+          token_type: newToken.tokenType,
+        };
+
+        // send new token to consumer
+        res.json(response);
+      } catch (error) {
+        next(error);
+      }
     }
   }
 };
 
-const createClient = (req, res, next) => {
-  const client = new Client({
-    name: "Suraj",
-    userId: 1,
-    redirectUri: "http://localhost:5200",
-    scope: "openid",
-  });
+// const createClient = (req, res, next) => {
+//   const client = new Client({
+//     name: "Suraj",
+//     userId: 1,
+//     redirectUri: "http://localhost:5200",
+//     scope: "openid",
+//   });
 
-  client.save((err) => {
-    if (err) {
-      next(new Error("Client name exists already"));
-    } else {
-      res.json(client);
-    }
-  });
-};
+//   client.save((err) => {
+//     if (err) {
+//       next(new Error("Client name exists already"));
+//     } else {
+//       res.json(client);
+//     }
+//   });
+// };
 
 module.exports = {
   getAuthorization,
   getToken,
-  createClient,
 };
