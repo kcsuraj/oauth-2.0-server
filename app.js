@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const morgan = require("morgan");
 const swaggerUi = require("swagger-ui-express");
-cors = require("cors");
 const constants = require("./utils/constants");
 const handleError = require("./middlewares/handleError");
 const routes = require("./routes");
@@ -11,9 +10,6 @@ const swaggerDocument = require("./swagger.json");
 
 // Create Express server
 const app = express();
-
-// Enable cors
-app.use(cors());
 
 // configure app to use body parser
 app.use(bodyParser.urlencoded({ extended: true }));
