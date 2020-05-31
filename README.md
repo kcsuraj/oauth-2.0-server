@@ -2,6 +2,8 @@
 
 Nodejs Server with OAuth 2.0 &amp; OpenID Connect
 
+**API Endpoint URL**: https://oauth2-node-server.herokuapp.com/
+
 ### Development
 
 **Requirements**
@@ -25,3 +27,9 @@ MONGO_URI=
 | `dev`      | Runs app in develement mode and watch file changes |
 
 **Reference**: [Identity and Data Security for Web Development](http://shop.oreilly.com/product/0636920044376.do)
+
+### Testing
+
+```bash
+client_id: 6656a7d2-5f10-4832-bef4-4d858f95645f
+```
