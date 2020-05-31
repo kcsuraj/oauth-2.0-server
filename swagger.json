@@ -75,7 +75,9 @@
             "content": {}
           }
         }
-      },
+      }
+    },
+    "/token": {
       "post": {
         "summary": "Get tokens",
         "operationId": "getToken",
