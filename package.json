@@ -1,4 +1,8 @@
 {
+  "name": "oauth-2.0-server",
+  "version": "1.0.0",
+  "description": "Nodejs Server with OAuth 2.0 & OpenID Connect",
+  "main": "server.js",
   "dependencies": {
     "body-parser": "^1.19.0",
     "dotenv": "^8.2.0",
