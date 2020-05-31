@@ -2,6 +2,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const morgan = require("morgan");
+const session = require("express-session");
+const path = require("path");
 const constants = require("./utils/constants");
 const handleError = require("./lib/middlewares/handleError");
 const routes = require("./routes");
@@ -13,8 +15,21 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+// view engine setup
+app.set("views", path.join(__dirname, "views"));
+app.set("view engine", "pug");
+
 // Add HTTP request logger
 app.use(morgan("combined"));
+
+app.use(
+  session({
+    secret: constants.sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 60000 },
+  })
+);
 
 // Connect to MongoDB database
 mongoose

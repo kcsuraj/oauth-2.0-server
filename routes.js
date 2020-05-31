@@ -1,4 +1,6 @@
 const Router = require("express");
+const uuid = require("node-uuid");
+const request = require("request");
 const AuthCode = require("./lib/models/authCode");
 const Client = require("./lib/models/client");
 const Token = require("./lib/models/token");
@@ -6,8 +8,62 @@ const RefreshToken = require("./lib/models/refreshToken");
 const IdToken = require("./lib/models/idToken");
 const authorize = require("./lib/middlewares/authorize");
 const authError = require("./lib/errors/authError");
+const constants = require("./utils/constants");
 
 const routes = Router();
+
+// ! REPLACE WITH SERVER URL
+const SERVER_URL = `http://localhost:5200`;
+
+routes.get("/", (req, res, next) => {
+  const state = uuid.v4();
+
+  const options = {
+    url: `${SERVER_URL}/authorize`,
+    client_id: constants.clientId,
+    redirect_uri: `${SERVER_URL}/callback`,
+    state,
+    scope: "openid",
+    response_type: "code",
+    user_id: 1,
+  };
+  console.log(options);
+
+  const authorizationURL = `${options.url}?redirect_uri=${options.redirect_uri}&user_id=${options.user_id}&client_id=${options.client_id}&response_type=${options.response_type}&state=${options.state}&scope=${options.scope}`;
+  console.log(authorizationURL);
+
+  res.render("index", {
+    authorizationURL,
+  });
+});
+
+routes.get("/callback", (req, res, next) => {
+  console.log("IN CALL BACK");
+  const { state, code } = req.query;
+
+  if (state !== req.session.state) {
+    next(new Error("State does not exist"));
+  }
+
+  request.post(
+    {
+      url: `${SERVER_URL}/token`,
+      form: {
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: `${SERVER_URL}/callback`,
+        client_id: constants.clientId,
+      },
+    },
+    (err, res, body) => {
+      if (err) {
+        next(err);
+      }
+
+      console.log(body);
+    }
+  );
+});
 
 routes.get("/authorize", (req, res, next) => {
   const {
@@ -51,13 +107,13 @@ routes.get("/authorize", (req, res, next) => {
         //   cancel the request - cient does not exist
       }
 
-      if (scope !== client.scope) {
-        //   scope is missing or not well defined
-      }
+      // if (scope !== client.scope) {
+      //   scope is missing or not well defined
+      // }
 
       const authCode = new AuthCode({
         clientId,
-        userId: client.userId,
+        // userId: client.userId,
         redirectUri,
       });
 
@@ -68,12 +124,13 @@ routes.get("/authorize", (req, res, next) => {
         code: authCode.code,
       };
 
+      console.log("====", redirectUri);
       if (redirectUri) {
         const redirect = `${redirectUri}?code=${response.code}&state=${
           state === undefined ? "" : state
         }`;
-        // res.redirect(redirect);
-        res.json(response);
+        res.redirect(redirect);
+        // res.json(response);
       } else {
         res.json(response);
       }
@@ -175,7 +232,7 @@ routes.post("/token", (req, res) => {
               };
             }
 
-            res.json(response);
+            // res.json(response);
           }
         );
       }
@@ -237,22 +294,22 @@ routes.post("/token", (req, res) => {
   }
 });
 
-routes.get("/", (req, res, next) => {
-  const client = new Client({
-    name: "Suraj",
-    userId: 1,
-    redirectUri: "http://localhost:5000",
-    scope: "read",
-  });
+// routes.get("/", (req, res, next) => {
+//   const client = new Client({
+//     name: "Suraj",
+//     userId: 1,
+//     redirectUri: "http://localhost:5000",
+//     scope: "read",
+//   });
 
-  client.save((err) => {
-    if (err) {
-      next(new Error("Client name exists already"));
-    } else {
-      res.json(client);
-    }
-  });
-});
+//   client.save((err) => {
+//     if (err) {
+//       next(new Error("Client name exists already"));
+//     } else {
+//       res.json(client);
+//     }
+//   });
+// });
 
 routes.get("/userInfo", authorize, (req, res) => {
   //
