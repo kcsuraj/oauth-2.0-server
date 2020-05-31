@@ -4,7 +4,7 @@ const bodyParser = require("body-parser");
 const morgan = require("morgan");
 const path = require("path");
 const constants = require("./utils/constants");
-const handleError = require("./lib/middlewares/handleError");
+const handleError = require("./middlewares/handleError");
 const routes = require("./routes");
 
 // Create Express server
