@@ -132,7 +132,7 @@ const getToken = async (req, res, next) => {
 
           response = {
             access_token: token.accessToken,
-            refreshToken: token.refreshToken,
+            refresh_token: token.refreshToken,
             id_token: idToken.sub,
             expires_in: token.expiresIn,
             token_type: token.tokenType,
