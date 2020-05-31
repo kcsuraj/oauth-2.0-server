@@ -18,7 +18,7 @@ app.use(morgan("combined"));
 
 // Connect to MongoDB database
 mongoose
-  .connect(constants.mongoURI, {
+  .connect(`${constants.dbURI}/${constants.dbName}`, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
     useCreateIndex: true,

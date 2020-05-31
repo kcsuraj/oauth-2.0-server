@@ -3,7 +3,8 @@ const dotenv = require("dotenv");
 dotenv.config({ path: ".env" });
 
 const constants = {
-  mongoURI: process.env.MONGO_URI,
+  dbURI: process.env.DB_URI,
+  dbName: process.env.DB_NAME,
 };
 
 module.exports = constants;
