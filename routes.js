@@ -75,21 +75,22 @@ routes.get("/authorize", (req, res, next) => {
   } = req.query;
 
   if (!responseType) {
-    // Cancel the request - Missed the response type
     throw new authError("invalid_request", "Missing param: response_type");
   }
 
   if (responseType !== "code") {
-    //   Notify the user about an unspupported response type
+    throw new authError("invalid_request", "Response type is not supported");
   }
 
   if (!clientId) {
-    //   cancel the request - Client id is missing
+    throw new authError("invalid_request", "Client Id is missing");
   }
 
   if (!scope || scope.indexOf("openid") < 0) {
-    //  Scope is missing or not well defined
-    console.log(" ===> scope missing");
+    throw new authError(
+      "invalid_scope",
+      "Scope is missing or not well defined"
+    );
   }
 
   // Mongoose model - consists of an id, secret, user ID and other attributes like redirectURI
@@ -104,16 +105,19 @@ routes.get("/authorize", (req, res, next) => {
       }
 
       if (!client) {
-        //   cancel the request - cient does not exist
+        throw new authError("invalid_request", "Client does not exist");
       }
 
-      // if (scope !== client.scope) {
-      //   scope is missing or not well defined
-      // }
+      if (scope !== client.scope) {
+        throw new authError(
+          "invalid_scope",
+          "Scope is missing or not well defined"
+        );
+      }
 
       const authCode = new AuthCode({
         clientId,
-        // userId: client.userId,
+        userId: client.userId,
         redirectUri,
       });
 
@@ -163,17 +167,19 @@ routes.post("/token", (req, res) => {
         let response;
 
         if (err) {
+          next(err);
           // handle error
         }
 
         if (!code) {
+          throw new authError(
+            "invalid_grant",
+            "No valid authorization code provided"
+          );
           // No valid authorization code provided
         }
         if (code.consumed) {
-          return errorHandler(
-            new authError("invalid_grant", "Authorization Code expired"),
-            res
-          );
+          throw new authError("invalid_grant", "Authorization code expired");
         }
 
         // code.consumed = true;
@@ -189,6 +195,7 @@ routes.post("/token", (req, res) => {
           },
           (error, client) => {
             if (error) {
+              next(error);
               // handle error
             }
             if (!client) {
@@ -246,14 +253,17 @@ routes.post("/token", (req, res) => {
         },
         (err, token) => {
           if (err) {
+            next(err);
             // handle error
           }
 
           if (!token) {
-            // no refresh token found
+            throw new authError("invalid_token", "Token not valid");
           }
           if (token.consumed) {
             // token got consumed already
+
+            throw new authError("invalid_grant", "Code expired");
           }
 
           // Consuem all previous refresh tokens
