@@ -1,6 +1,4 @@
 const Router = require("express");
-const uuid = require("node-uuid");
-const request = require("request");
 const AuthCode = require("./lib/models/authCode");
 const Client = require("./lib/models/client");
 const Token = require("./lib/models/token");
@@ -8,62 +6,8 @@ const RefreshToken = require("./lib/models/refreshToken");
 const IdToken = require("./lib/models/idToken");
 const authorize = require("./lib/middlewares/authorize");
 const authError = require("./lib/errors/authError");
-const constants = require("./utils/constants");
 
 const routes = Router();
-
-// ! REPLACE WITH SERVER URL
-const SERVER_URL = `http://localhost:5200`;
-
-routes.get("/", (req, res, next) => {
-  const state = uuid.v4();
-
-  const options = {
-    url: `${SERVER_URL}/authorize`,
-    client_id: constants.clientId,
-    redirect_uri: `${SERVER_URL}/callback`,
-    state,
-    scope: "openid",
-    response_type: "code",
-    user_id: 1,
-  };
-  console.log(options);
-
-  const authorizationURL = `${options.url}?redirect_uri=${options.redirect_uri}&user_id=${options.user_id}&client_id=${options.client_id}&response_type=${options.response_type}&state=${options.state}&scope=${options.scope}`;
-  console.log(authorizationURL);
-
-  res.render("index", {
-    authorizationURL,
-  });
-});
-
-routes.get("/callback", (req, res, next) => {
-  console.log("IN CALL BACK");
-  const { state, code } = req.query;
-
-  if (state !== req.session.state) {
-    next(new Error("State does not exist"));
-  }
-
-  request.post(
-    {
-      url: `${SERVER_URL}/token`,
-      form: {
-        code,
-        grant_type: "authorization_code",
-        redirect_uri: `${SERVER_URL}/callback`,
-        client_id: constants.clientId,
-      },
-    },
-    (err, res, body) => {
-      if (err) {
-        next(err);
-      }
-
-      console.log(body);
-    }
-  );
-});
 
 routes.get("/authorize", (req, res, next) => {
   const {
@@ -86,12 +30,12 @@ routes.get("/authorize", (req, res, next) => {
     throw new authError("invalid_request", "Client Id is missing");
   }
 
-  if (!scope || scope.indexOf("openid") < 0) {
-    throw new authError(
-      "invalid_scope",
-      "Scope is missing or not well defined"
-    );
-  }
+  // if (!scope || scope.indexOf("openid") < 0) {
+  //   throw new authError(
+  //     "invalid_scope",
+  //     "Scope is missing or not well defined"
+  //   );
+  // }
 
   // Mongoose model - consists of an id, secret, user ID and other attributes like redirectURI
   Client.findOne(
@@ -105,13 +49,12 @@ routes.get("/authorize", (req, res, next) => {
       }
 
       if (!client) {
-        throw new authError("invalid_request", "Client does not exist");
+        return next(new authError("invalid_request", "Client does not exist"));
       }
 
       if (scope !== client.scope) {
-        throw new authError(
-          "invalid_scope",
-          "Scope is missing or not well defined"
+        return next(
+          new authError("invalid_scope", "Scope is missing or not well defined")
         );
       }
 
@@ -128,16 +71,7 @@ routes.get("/authorize", (req, res, next) => {
         code: authCode.code,
       };
 
-      console.log("====", redirectUri);
-      if (redirectUri) {
-        const redirect = `${redirectUri}?code=${response.code}&state=${
-          state === undefined ? "" : state
-        }`;
-        res.redirect(redirect);
-        // res.json(response);
-      } else {
-        res.json(response);
-      }
+      res.json(response);
     }
   );
 });
@@ -152,10 +86,7 @@ routes.post("/token", (req, res) => {
 
   if (!grantType) {
     // No grant type passed - Cancel the request
-    return errorHandler(
-      new authError("invalid_request", "Missing parameter: grant_type"),
-      res
-    );
+    throw new authError("invalid_request", "Missing parameter: grant_type");
   }
 
   if (grantType === "authorization_code") {
@@ -168,7 +99,6 @@ routes.post("/token", (req, res) => {
 
         if (err) {
           next(err);
-          // handle error
         }
 
         if (!code) {
@@ -176,14 +106,13 @@ routes.post("/token", (req, res) => {
             "invalid_grant",
             "No valid authorization code provided"
           );
-          // No valid authorization code provided
         }
         if (code.consumed) {
           throw new authError("invalid_grant", "Authorization code expired");
         }
 
-        // code.consumed = true;
-        // code.save();
+        code.consumed = true;
+        code.save();
         // if (code.redirectUri !== redirectUri) {
         // cancel the request
         // }
@@ -199,8 +128,12 @@ routes.post("/token", (req, res) => {
               // handle error
             }
             if (!client) {
-              // client id provided does not exist
+              throw new authError("invalid_request", "Client id not found");
             }
+
+            var refreshToken = new RefreshToken({ userId: code.userId });
+
+            refreshToken.save();
 
             const token = new Token({
               refreshToken: refreshToken.token,
@@ -239,7 +172,7 @@ routes.post("/token", (req, res) => {
               };
             }
 
-            // res.json(response);
+            res.json(response);
           }
         );
       }
@@ -304,22 +237,22 @@ routes.post("/token", (req, res) => {
   }
 });
 
-// routes.get("/", (req, res, next) => {
-//   const client = new Client({
-//     name: "Suraj",
-//     userId: 1,
-//     redirectUri: "http://localhost:5000",
-//     scope: "read",
-//   });
+routes.get("/client", (req, res, next) => {
+  const client = new Client({
+    name: "Suraj",
+    userId: 1,
+    redirectUri: "http://localhost:5200",
+    scope: "openid",
+  });
 
-//   client.save((err) => {
-//     if (err) {
-//       next(new Error("Client name exists already"));
-//     } else {
-//       res.json(client);
-//     }
-//   });
-// });
+  client.save((err) => {
+    if (err) {
+      next(new Error("Client name exists already"));
+    } else {
+      res.json(client);
+    }
+  });
+});
 
 routes.get("/userInfo", authorize, (req, res) => {
   //
