@@ -2,7 +2,8 @@
 
 Nodejs Server with OAuth 2.0 &amp; OpenID Connect
 
-**Playground**: https://oauth2-node-server.herokuapp.com/docs
+**Playground**: https://oauth2-node-server.herokuapp.com/docs <br />
+**Documentation**: https://github.com/kcsuraj/oauth-2.0-server/wiki
 
 ### Development
 
@@ -26,8 +27,6 @@ MONGO_URI=
 | `start`    | Runs app in development mode                       |
 | `dev`      | Runs app in develement mode and watch file changes |
 
-**Reference**: [Identity and Data Security for Web Development](http://shop.oreilly.com/product/0636920044376.do)
-
 ### Testing
 
 For Production
@@ -35,3 +34,5 @@ For Production
 ```bash
 client_id: 6656a7d2-5f10-4832-bef4-4d858f95645f
 ```
+
+**Reference**: [Identity and Data Security for Web Development](http://shop.oreilly.com/product/0636920044376.do)
